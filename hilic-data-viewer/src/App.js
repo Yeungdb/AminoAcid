@@ -1,5 +1,6 @@
 import React, { Component } from "react";
 import { DataGrid } from "@mui/x-data-grid";
+import { CSVLink } from "react-csv"
 import './App.css';
 
 class App extends Component {
@@ -8,12 +9,19 @@ class App extends Component {
     super(props);
     this.state = {
       input: "",
-      tableData: [[], []]
+      tableData: [[], []],
+      csvData: [[], []]
     };
 
     // tableData Structure:
     // [0] -> column data
     // [1] -> row data
+
+    // csvData Structure
+    // [0] -> header data
+    // [1] -> row data
+
+    this.downloadRef = React.createRef(); // reference to the CSVLink component
 
     this.handleSubmit = this.handleSubmit.bind(this);
     this.handleChange = this.handleChange.bind(this);
@@ -22,6 +30,8 @@ class App extends Component {
     this.getRetentionTime = this.getRetentionTime.bind(this);
     this.getCharge = this.getCharge.bind(this);
     this.populateTable = this.populateTable.bind(this);
+    this.packageTableData = this.packageTableData.bind(this);
+    this.processDownload = this.processDownload.bind(this);
 
 
     // Set up the columns for the table
@@ -51,13 +61,44 @@ class App extends Component {
   handleChange(event) {
     event.preventDefault();
 
-    // Update the input state variable with whatever is entered in the textbox
-    this.setState({ input: event.target.value });
+    this.setState({ input: event.target.value }); // update the state variable "input" with whatever is entered in the textbox
   }
 
   handleExport(event) {
     event.preventDefault();
-    // TODO: implement
+    
+    this.packageTableData(); // rearrange data to make it more convenient for csv
+    this.processDownload(); // trigger a download of the csv
+  }
+
+  /**
+   * packageTableData()
+   * 
+   * PURPOSE: format the table data to prepare it for export to csv
+   */
+  packageTableData(){
+    var csvData = this.state.tableData[1];
+    var csvHeaders = [];
+
+    // Prepare csv headers
+    for(var header of this.state.tableData[0]){
+      csvHeaders.push({label: header.headerName, key: header.field});
+    }
+
+    // Update the csvData state variable with the reformatted headers/data
+    var formattedCSVData = this.state.csvData;
+    formattedCSVData[0] = csvHeaders;
+    formattedCSVData[1] = csvData;
+    this.setState({csvData: formattedCSVData});
+  }
+
+  /**
+   * processDownload()
+   * 
+   * PURPOSE: trigger the download of the csv file by clicking the CSVLink
+   */
+  processDownload(){
+    this.downloadRef.current.link.click();
   }
 
   /**
@@ -72,14 +113,14 @@ class App extends Component {
     if(inputString === undefined)
       return [];
 
+    // Set string to all uppercase
+    inputString = inputString.toUpperCase();
     
     // Split the input string by commas into an array
-    var peptides = inputString.split(",");
+    var peptides = inputString.split(/[ ,]+/);
 
-    // Remove whitespace from peptides
-    for (var i = 0; i < peptides.length; i++) {
-      peptides[i] = peptides[i].trim().toUpperCase();
-    }
+    // Remove any empty strings
+    peptides = peptides.filter(String);
 
     // Return the parsed peptide list
     return peptides;
@@ -195,7 +236,7 @@ class App extends Component {
     for(var i=0; i<peptideList.length; i++){
       rows.push({
         id: i, 
-        index: i, 
+        index: i+1, 
         seq: peptideList[i], 
         length: peptideList[i].length, 
         charge: this.getCharge(peptideList[i]), 
@@ -208,6 +249,7 @@ class App extends Component {
     tableDataWithRows[1] = rows;
     this.setState({tableData: tableDataWithRows});
   }
+
 
   render() {
     return (<div className="App">
@@ -225,6 +267,7 @@ class App extends Component {
       <div style={{height: 400, width: '100%'}}>
         <DataGrid rows={this.state.tableData[1]} columns={this.state.tableData[0]} />
       </div>
+      <CSVLink ref={this.downloadRef} data={this.state.csvData[1]} headers={this.state.csvData[0]} filename="HILIC_Peptide_Analysis.csv"></CSVLink>
     </div>);
   }
 }
