@@ -46,7 +46,7 @@ class App extends Component {
     // Add the table columns to the tableData state variable
     var tableDataWithColumns = this.state.tableData;
     tableDataWithColumns[0] = columns;
-    this.setState({tableData: tableDataWithColumns});
+    this.state.tableData = tableDataWithColumns;
 
   }
 
@@ -55,7 +55,7 @@ class App extends Component {
 
     // Get the list of peptides entered, analyze and fill the table with the results
     var peptideList = this.parsePeptides(this.state.input);
-    this.populateTable(peptideList);
+    this.setState({tableData: this.populateTable(peptideList)});
   }
 
   handleChange(event) {
@@ -67,7 +67,7 @@ class App extends Component {
   handleExport(event) {
     event.preventDefault();
     
-    this.packageTableData(); // rearrange data to make it more convenient for csv
+    this.setState({csvData: this.packageTableData()}); // update state with rearranged data to make it more convenient for csv
     this.processDownload(); // trigger a download of the csv
   }
 
@@ -75,10 +75,13 @@ class App extends Component {
    * packageTableData()
    * 
    * PURPOSE: format the table data to prepare it for export to csv
+   * 
+   * @returns {Array} 2D array containing the header data [0] and row data [1]
    */
   packageTableData(){
     var csvData = this.state.tableData[1];
     var csvHeaders = [];
+    var packagedData = [];
 
     // Prepare csv headers
     for(var header of this.state.tableData[0]){
@@ -86,10 +89,11 @@ class App extends Component {
     }
 
     // Update the csvData state variable with the reformatted headers/data
-    var formattedCSVData = this.state.csvData;
-    formattedCSVData[0] = csvHeaders;
-    formattedCSVData[1] = csvData;
-    this.setState({csvData: formattedCSVData});
+    packagedData = this.state.csvData;
+    packagedData[0] = csvHeaders;
+    packagedData[1] = csvData;
+
+    return packagedData;
   }
 
   /**
@@ -171,7 +175,7 @@ class App extends Component {
 
     // Only process the peptide string if it is not empty
     if (peptide === "") {
-      return;
+      return undefined;
     }
 
     // Get the sum of the retention coefficients for each amino acid in the peptide
@@ -182,12 +186,13 @@ class App extends Component {
         retCoeffSum += retCoeff[acid];
       }
       else {
-        return 0;
+        return undefined;
       }
     }
 
     // Calculate the estimated retention time using the Peptide Retention Prediction equation, rounded to 2 decimal points
-    estTime = ((1 - (a * Math.log(peptide.length))) * (retCoeffSum + b)).toFixed(2);
+    estTime = ((1 - (a * Math.log(peptide.length))) * (retCoeffSum + b));
+    estTime = Math.round(estTime * 1e2)/1e2;
 
     // Return the estimated retention time
     return estTime;
@@ -203,15 +208,19 @@ class App extends Component {
    */
   getCharge(peptide){
     // Check if the peptide is undefined before proceeding
-    if(peptide === undefined)
-      return 0;
+    if(peptide === undefined || peptide === "")
+      return undefined;
 
-  
+    const aminoAcids = "ARNDCQEGHILKMFPSTWYV"; // all valid amino acids
     const charged = "KRH"; // amino acids which affect the charge of the peptide
-    var charge = 0; // charge of the peptide
+    var charge = 1; // charge of the peptide (accounting for end terminus)
 
     // Calculate the charge of the peptide
     for(var acid of peptide){
+      if(!aminoAcids.includes(acid)){
+        // Return undefined if the peptide contains an invalid amino acid
+        return undefined;
+      }
       if(charged.includes(acid)){
         charge++;
       }
@@ -226,11 +235,12 @@ class App extends Component {
    * PURPOSE: fill the table with the data in peptideList
    * 
    * @param {array} peptideList array of peptides to analyze and enter into table
+   * @returns {Array} 2D array containing column data [0] and row data [1]
    */
   populateTable(peptideList){
     // Check if the array of peptides is undefined before proceeding
     if(peptideList === undefined)
-      return;
+      return undefined;
 
     var rows = [];
     for(var i=0; i<peptideList.length; i++){
@@ -247,7 +257,8 @@ class App extends Component {
     // Add the row data to the tableData state variable
     var tableDataWithRows = this.state.tableData;
     tableDataWithRows[1] = rows;
-    this.setState({tableData: tableDataWithRows});
+
+    return tableDataWithRows;
   }
 
 
@@ -265,7 +276,7 @@ class App extends Component {
       <br></br>
       <button onClick={this.handleExport}>Export to CSV</button>
       <div style={{height: 400, width: '100%'}}>
-        <DataGrid rows={this.state.tableData[1]} columns={this.state.tableData[0]} />
+        <DataGrid data-testid="datagrid" rows={this.state.tableData[1]} columns={this.state.tableData[0]} />
       </div>
       <CSVLink ref={this.downloadRef} data={this.state.csvData[1]} headers={this.state.csvData[0]} filename="HILIC_Peptide_Analysis.csv"></CSVLink>
     </div>);
